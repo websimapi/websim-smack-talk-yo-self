@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smack Talk Yo Self!</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎤 Smack Talk Yo Self! 🗣️</h1>
+            <p>Your AI voice clone that talks back with attitude!</p>
+        </header>
+
+        <div class="main-interface">
+            <div class="recording-section">
+                <div class="mic-container">
+                    <button id="recordBtn" class="record-btn">
+                        <span class="mic-icon">🎤</span>
+                        <span class="btn-text">Start Recording</span>
+                    </button>
+                    <div class="recording-indicator" id="recordingIndicator">
+                        <div class="pulse"></div>
+                        Recording...
+                    </div>
+                </div>
+                
+                <div class="audio-visualizer" id="audioVisualizer">
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+            </div>
+
+            <div class="conversation-area">
+                <div class="message-container" id="messageContainer">
+                    <div class="welcome-message">
+                        <p>🔥 Ready to get roasted by yourself? Hit that mic and say something!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="loading-content">
+                    <div class="spinner"></div>
+                    <div class="loading-text" id="loadingText">Processing your trash talk...</div>
+                    <div class="loading-steps">
+                        <div class="step" id="step1">🎤 Transcribing speech</div>
+                        <div class="step" id="step2">🧠 Generating smack talk</div>
+                        <div class="step" id="step3">🗣️ Cloning your voice</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="clearHistory" class="secondary-btn">Clear History</button>
+                <div class="stats">
+                    <span>Conversations: <span id="conversationCount">0</span></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Your voice clone gets smarter with every roast! 🔥</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
+
