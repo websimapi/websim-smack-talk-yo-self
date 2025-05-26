@@ -8,6 +8,8 @@ class SmackTalkApp {
         this.userSpeakingStyle = this.loadSpeakingStyle();
         this.maxRetries = 3;
         this.baseRetryDelay = 1000; // 1 second
+        this.liveRecognition = null;
+        this.finalTranscript = '';
         
         this.initializeElements();
         this.setupEventListeners();
@@ -23,6 +25,8 @@ class SmackTalkApp {
         this.clearHistoryBtn = document.getElementById('clearHistory');
         this.conversationCountEl = document.getElementById('conversationCount');
         this.audioVisualizer = document.getElementById('audioVisualizer');
+        this.liveTranscription = document.getElementById('liveTranscription');
+        this.transcriptionText = document.getElementById('transcriptionText');
     }
 
     setupEventListeners() {
@@ -55,6 +59,7 @@ class SmackTalkApp {
             this.mediaRecorder.start();
             this.isRecording = true;
             this.updateRecordingUI();
+            this.startLiveTranscription();
             this.startAudioVisualization(stream);
         } catch (error) {
             console.error('Error accessing microphone:', error);
@@ -68,6 +73,7 @@ class SmackTalkApp {
             this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
             this.isRecording = false;
             this.updateRecordingUI();
+            this.stopLiveTranscription();
             this.stopAudioVisualization();
         }
     }
@@ -191,8 +197,12 @@ class SmackTalkApp {
     }
 
     async transcribeAudio(audioBlob) {
-        // For this demo, we'll use the browser's speech recognition
-        // In a real implementation, you might use a more robust service
+        // Use the final transcript from live recognition if available
+        if (this.finalTranscript.trim()) {
+            return this.finalTranscript.trim();
+        }
+        
+        // Fallback to original transcription method
         return new Promise((resolve) => {
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
             recognition.continuous = false;
@@ -454,6 +464,67 @@ class SmackTalkApp {
 
     saveSpeakingStyle() {
         localStorage.setItem('smackTalkStyle', JSON.stringify(this.userSpeakingStyle));
+    }
+
+    startLiveTranscription() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            console.warn('Speech recognition not supported');
+            return;
+        }
+
+        this.liveRecognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        this.liveRecognition.continuous = true;
+        this.liveRecognition.interimResults = true;
+        this.liveRecognition.lang = 'en-US';
+        
+        this.finalTranscript = '';
+        this.liveTranscription.classList.add('active');
+        this.transcriptionText.textContent = 'Listening...';
+
+        this.liveRecognition.onresult = (event) => {
+            let interimTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    this.finalTranscript += transcript + ' ';
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+            
+            const displayText = this.finalTranscript + interimTranscript;
+            this.transcriptionText.textContent = displayText || 'Listening...';
+            this.transcriptionText.className = interimTranscript ? 'transcription-text interim' : 'transcription-text';
+        };
+
+        this.liveRecognition.onerror = (event) => {
+            console.warn('Live transcription error:', event.error);
+            if (event.error !== 'no-speech') {
+                this.transcriptionText.textContent = 'Transcription error - keep speaking...';
+            }
+        };
+
+        this.liveRecognition.onend = () => {
+            if (this.isRecording) {
+                // Restart if still recording
+                setTimeout(() => {
+                    if (this.isRecording && this.liveRecognition) {
+                        this.liveRecognition.start();
+                    }
+                }, 100);
+            }
+        };
+
+        this.liveRecognition.start();
+    }
+
+    stopLiveTranscription() {
+        if (this.liveRecognition) {
+            this.liveRecognition.stop();
+            this.liveRecognition = null;
+        }
+        this.liveTranscription.classList.remove('active');
     }
 }
 
