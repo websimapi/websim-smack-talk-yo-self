@@ -10,6 +10,7 @@ class SmackTalkApp {
         this.baseRetryDelay = 1000; // 1 second
         this.liveRecognition = null;
         this.finalTranscript = '';
+        this.lastInterimTranscript = '';
         
         this.initializeElements();
         this.setupEventListeners();
@@ -197,33 +198,14 @@ class SmackTalkApp {
     }
 
     async transcribeAudio(audioBlob) {
-        // Use the final transcript from live recognition if available
-        if (this.finalTranscript.trim()) {
-            return this.finalTranscript.trim();
+        // Use the transcript from live recognition (final + last interim)
+        const liveTranscript = (this.finalTranscript + this.lastInterimTranscript).trim();
+        if (liveTranscript) {
+            return liveTranscript;
         }
         
-        // Fallback to original transcription method
-        return new Promise((resolve) => {
-            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                resolve(transcript);
-            };
-            
-            recognition.onerror = () => {
-                resolve('Could not transcribe audio');
-            };
-            
-            // Convert blob to audio element for recognition
-            const audio = new Audio(URL.createObjectURL(audioBlob));
-            audio.onloadeddata = () => {
-                recognition.start();
-            };
-            audio.load();
-        });
+        // If no live transcript available, return error message
+        throw new Error('No speech detected during recording');
     }
 
     async generateSmackTalkResponse(userInput) {
@@ -436,7 +418,7 @@ class SmackTalkApp {
         
         this.messageContainer.innerHTML = `
             <div class="welcome-message">
-                <p>🔥 Ready to get roasted by yourself? Hit that mic and say something!</p>
+                <p> Ready to get roasted by yourself? Hit that mic and say something!</p>
             </div>
         `;
         
@@ -478,6 +460,7 @@ class SmackTalkApp {
         this.liveRecognition.lang = 'en-US';
         
         this.finalTranscript = '';
+        this.lastInterimTranscript = '';
         this.liveTranscription.classList.add('active');
         this.transcriptionText.textContent = 'Listening...';
 
@@ -492,6 +475,9 @@ class SmackTalkApp {
                     interimTranscript += transcript;
                 }
             }
+            
+            // Store the latest interim transcript
+            this.lastInterimTranscript = interimTranscript;
             
             const displayText = this.finalTranscript + interimTranscript;
             this.transcriptionText.textContent = displayText || 'Listening...';
