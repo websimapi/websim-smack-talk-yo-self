@@ -6,6 +6,8 @@ class SmackTalkApp {
         this.conversationHistory = this.loadConversationHistory();
         this.voiceSample = null;
         this.userSpeakingStyle = this.loadSpeakingStyle();
+        this.maxRetries = 3;
+        this.baseRetryDelay = 1000; // 1 second
         
         this.initializeElements();
         this.setupEventListeners();
@@ -120,6 +122,20 @@ class SmackTalkApp {
         });
     }
 
+    async retryWithBackoff(fn, retries = this.maxRetries, delay = this.baseRetryDelay) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (retries <= 0) {
+                throw error;
+            }
+            
+            console.warn(`Operation failed, retrying in ${delay}ms... (${retries} retries left)`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return this.retryWithBackoff(fn, retries - 1, delay * 2);
+        }
+    }
+
     async processRecording() {
         this.showLoading();
         
@@ -127,7 +143,9 @@ class SmackTalkApp {
             // Step 1: Convert audio to text
             this.setLoadingStep(1);
             const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
-            const transcription = await this.transcribeAudio(audioBlob);
+            const transcription = await this.retryWithBackoff(
+                () => this.transcribeAudio(audioBlob)
+            );
             
             if (!transcription.trim()) {
                 this.hideLoading();
@@ -139,12 +157,16 @@ class SmackTalkApp {
             
             // Step 2: Generate AI response
             this.setLoadingStep(2);
-            const aiResponse = await this.generateSmackTalkResponse(transcription);
+            const aiResponse = await this.retryWithBackoff(
+                () => this.generateSmackTalkResponse(transcription)
+            );
             this.addMessage('ai', aiResponse);
             
             // Step 3: Generate voice clone and play
             this.setLoadingStep(3);
-            await this.speakResponse(aiResponse, audioBlob);
+            await this.retryWithBackoff(
+                () => this.speakResponse(aiResponse, audioBlob)
+            );
             
             // Update conversation history and learning
             this.updateConversationHistory(transcription, aiResponse);
@@ -152,7 +174,17 @@ class SmackTalkApp {
             
         } catch (error) {
             console.error('Error processing recording:', error);
-            this.addMessage('system', 'Error processing your recording. Please try again.');
+            let errorMessage = 'Error processing your recording. ';
+            
+            if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
+                errorMessage += 'Network connection issue. Please check your internet and try again.';
+            } else if (error.message.includes('quota') || error.message.includes('limit')) {
+                errorMessage += 'Service temporarily unavailable. Please try again in a moment.';
+            } else {
+                errorMessage += 'Please try again.';
+            }
+            
+            this.addMessage('system', errorMessage);
         } finally {
             this.hideLoading();
         }
@@ -185,23 +217,30 @@ class SmackTalkApp {
     }
 
     async generateSmackTalkResponse(userInput) {
-        const systemPrompt = `You are a sassy AI that roasts and talks smack back to the user in their own style. 
-        Be playful, witty, and engaging - not mean or hurtful. Match their energy and speaking style.
-        
-        User's speaking style patterns: ${JSON.stringify(this.userSpeakingStyle)}
-        
-        Recent conversation context: ${this.conversationHistory.slice(-5).map(msg => `${msg.role}: ${msg.content}`).join('\n')}
-        
-        Respond with attitude and personality, keeping it fun and engaging. Use their own words and phrases against them when possible.`;
+        try {
+            const systemPrompt = `You are a sassy AI that roasts and talks smack back to the user in their own style. 
+            Be playful, witty, and engaging - not mean or hurtful. Match their energy and speaking style.
+            
+            User's speaking style patterns: ${JSON.stringify(this.userSpeakingStyle)}
+            
+            Recent conversation context: ${this.conversationHistory.slice(-5).map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+            
+            Respond with attitude and personality, keeping it fun and engaging. Use their own words and phrases against them when possible.`;
 
-        const completion = await websim.chat.completions.create({
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: userInput }
-            ]
-        });
+            const completion = await websim.chat.completions.create({
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userInput }
+                ]
+            });
 
-        return completion.content;
+            return completion.content;
+        } catch (error) {
+            if (error.message.includes('network') || error.message.includes('fetch')) {
+                throw new Error('Network error generating response');
+            }
+            throw error;
+        }
     }
 
     async speakResponse(text, userVoiceSample) {
@@ -213,13 +252,18 @@ class SmackTalkApp {
                 voiceOptions.voice_sample = this.voiceSample;
             } else if (userVoiceSample) {
                 // Convert blob to data URL for voice cloning
-                const arrayBuffer = await userVoiceSample.arrayBuffer();
-                const uint8Array = new Uint8Array(arrayBuffer);
-                const base64 = btoa(String.fromCharCode.apply(null, uint8Array));
-                const dataUrl = `data:audio/wav;base64,${base64}`;
-                
-                voiceOptions.voice_sample = dataUrl;
-                this.voiceSample = dataUrl; // Store for future use
+                try {
+                    const arrayBuffer = await userVoiceSample.arrayBuffer();
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    const base64 = btoa(String.fromCharCode.apply(null, uint8Array));
+                    const dataUrl = `data:audio/wav;base64,${base64}`;
+                    
+                    voiceOptions.voice_sample = dataUrl;
+                    this.voiceSample = dataUrl; // Store for future use
+                } catch (voiceError) {
+                    console.warn('Failed to process voice sample, using default voice:', voiceError);
+                    voiceOptions.voice = 'en-male';
+                }
             } else {
                 // Fallback to default voice
                 voiceOptions.voice = 'en-male';
@@ -227,19 +271,44 @@ class SmackTalkApp {
 
             const result = await websim.textToSpeech(voiceOptions);
             
-            // Play the audio
+            // Play the audio with error handling
             const audio = new Audio(result.url);
-            audio.play();
+            
+            return new Promise((resolve, reject) => {
+                audio.onloadeddata = () => {
+                    audio.play().then(resolve).catch(reject);
+                };
+                audio.onerror = () => {
+                    reject(new Error('Failed to load audio'));
+                };
+                audio.onended = resolve;
+            });
             
         } catch (error) {
             console.error('Error generating speech:', error);
-            // Fallback to default voice
-            const result = await websim.textToSpeech({
-                text: text,
-                voice: 'en-male'
-            });
-            const audio = new Audio(result.url);
-            audio.play();
+            
+            // Enhanced fallback handling
+            try {
+                console.log('Attempting fallback to default voice...');
+                const result = await websim.textToSpeech({
+                    text: text,
+                    voice: 'en-male'
+                });
+                
+                const audio = new Audio(result.url);
+                return new Promise((resolve, reject) => {
+                    audio.onloadeddata = () => {
+                        audio.play().then(resolve).catch(reject);
+                    };
+                    audio.onerror = () => {
+                        reject(new Error('Failed to load fallback audio'));
+                    };
+                    audio.onended = resolve;
+                });
+            } catch (fallbackError) {
+                console.error('Fallback voice also failed:', fallbackError);
+                throw new Error('Text-to-speech service unavailable');
+            }
         }
     }
 
@@ -392,4 +461,3 @@ class SmackTalkApp {
 document.addEventListener('DOMContentLoaded', () => {
     new SmackTalkApp();
 });
-
