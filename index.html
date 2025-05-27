@@ -7,6 +7,24 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Voice Consent Modal -->
+    <div class="consent-modal" id="consentModal">
+        <div class="consent-content">
+            <h2>🎤 Voice Cloning Consent</h2>
+            <div class="consent-text">
+                <p>By continuing, you consent to the recording, processing, and use of your voice to generate a synthetic clone using AI technology. This clone may be used within this app for communication with yourself or for other authorized purposes.</p>
+                
+                <p><strong>Important:</strong> Users under the age of 18 must have parental consent before using voice cloning features.</p>
+                
+                <p>Your voice data will be processed locally and used to create personalized responses. No voice data will be permanently stored or shared with third parties.</p>
+            </div>
+            <div class="consent-actions">
+                <button id="acceptConsent" class="consent-btn accept">I Accept & Consent</button>
+                <button id="declineConsent" class="consent-btn decline">Decline</button>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <header>
             <h1>🎤 Smack Talk Yo Self! 🗣️</h1>

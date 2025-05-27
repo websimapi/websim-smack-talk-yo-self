@@ -13,6 +13,7 @@ class SmackTalkApp {
         this.lastInterimTranscript = '';
         
         this.initializeElements();
+        this.checkConsentStatus();
         this.setupEventListeners();
         this.updateConversationCount();
     }
@@ -28,14 +29,50 @@ class SmackTalkApp {
         this.audioVisualizer = document.getElementById('audioVisualizer');
         this.liveTranscription = document.getElementById('liveTranscription');
         this.transcriptionText = document.getElementById('transcriptionText');
+        this.consentModal = document.getElementById('consentModal');
+        this.acceptConsentBtn = document.getElementById('acceptConsent');
+        this.declineConsentBtn = document.getElementById('declineConsent');
     }
 
     setupEventListeners() {
         this.recordBtn.addEventListener('click', () => this.toggleRecording());
         this.clearHistoryBtn.addEventListener('click', () => this.clearHistory());
+        this.acceptConsentBtn.addEventListener('click', () => this.handleConsentAccept());
+        this.declineConsentBtn.addEventListener('click', () => this.handleConsentDecline());
+    }
+
+    checkConsentStatus() {
+        const hasConsented = localStorage.getItem('voiceCloneConsent');
+        if (hasConsented === 'true') {
+            this.consentModal.classList.add('hidden');
+        } else {
+            this.consentModal.classList.remove('hidden');
+            // Disable main app interactions until consent is given
+            this.recordBtn.disabled = true;
+            this.clearHistoryBtn.disabled = true;
+        }
+    }
+
+    handleConsentAccept() {
+        localStorage.setItem('voiceCloneConsent', 'true');
+        this.consentModal.classList.add('hidden');
+        this.recordBtn.disabled = false;
+        this.clearHistoryBtn.disabled = false;
+    }
+
+    handleConsentDecline() {
+        alert('Voice cloning features require consent to function. Please refresh the page if you change your mind.');
+        // Keep the modal visible and app disabled
     }
 
     async toggleRecording() {
+        // Check consent before allowing recording
+        const hasConsented = localStorage.getItem('voiceCloneConsent');
+        if (hasConsented !== 'true') {
+            alert('Please accept the voice cloning consent agreement first.');
+            return;
+        }
+
         if (!this.isRecording) {
             await this.startRecording();
         } else {
